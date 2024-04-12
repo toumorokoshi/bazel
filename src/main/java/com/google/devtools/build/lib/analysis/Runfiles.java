@@ -353,6 +353,7 @@ public final class Runfiles implements RunfilesApi {
     Map<PathFragment, Artifact> manifest = getSymlinksAsMap(checker);
     // Add artifacts (committed to inclusion on construction of runfiles).
     for (Artifact artifact : artifacts.toList()) {
+      eventHandler.handle(Event.of(EventKind.DEBUG, location, artifact.getRunfilesPathString()));
       checker.put(manifest, artifact.getRunfilesPath(), artifact);
     }
 
