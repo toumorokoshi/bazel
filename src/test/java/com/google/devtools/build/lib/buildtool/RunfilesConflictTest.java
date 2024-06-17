@@ -28,6 +28,8 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
         assertContents("print('community')", "//x:hello_world_community");
         buildTarget("//x:hello_world_enterprise");
         assertContents("print('enterprise')", "//x:hello_world_enterprise");
+        buildTarget("//x:combined");
+        assertContents("print('community')\nprint('enterprise')", "//x:combined");
     }
 
     private void writeFile() throws IOException {
@@ -137,6 +139,16 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
                           dep=":echo_edition",
                           edition="enterprise",
                           out="enterprise.txt"
+                       )
+                       
+                       genrule(
+                           name = "combined",
+                           srcs = [
+                             ":hello_world_community",
+                             ":hello_world_enterprise",
+                           ],
+                           outs = ["combined.txt"],
+                           cmd = "cat $(SRCS) > $(location combined.txt)",
                        )
                        """);
     }
