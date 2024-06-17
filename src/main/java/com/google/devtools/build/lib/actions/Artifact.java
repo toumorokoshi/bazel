@@ -762,40 +762,31 @@ public abstract class Artifact
    * runfiles tree. For local targets, it returns the rootRelativePath.
    */
   public final PathFragment getRunfilesPath() {
-    if (root.isExternal()) {
-      return LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(execPath.subFragment(1));
+    PathFragment relativePath = getRootRelativePath();
+    // Runfile paths for external artifacts should be prefixed with "../<repo name>".
+    if (root.isLegacy()) {
+      // Root-relative paths of external artifacts under legacy roots are already prefixed with
+      // "external/<repo name>". Just replace "external" with "..".
+      if (relativePath.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX)) {
+        relativePath = relativePath.relativeTo(LabelConstants.EXTERNAL_PATH_PREFIX);
+        relativePath = LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(relativePath);
+      }
     } else {
-      return execPath.subFragment(1);
+      if (root.isExternal()) {
+        // Both external source artifacts and external derived artifacts have their repo name as
+        // their 2nd level directory name in their exec paths.
+        // i.e. external/<repo name>/... and bazel-out/<repo name>/...
+        // This is a pure coincidence, and the below line needs to be updated if any of the
+        // directory structures change.
+        String repoName = execPath.getSegment(1);
+        relativePath =
+            LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX
+                .getRelative(repoName)
+                .getRelative(relativePath);
+      }
     }
-    // old code.
-    // PathFragment relativePath = getRootRelativePath();
-    // System.out.println(relativePath.toString() + " is legacy: " + root.isLegacy());
-    // // Runfile paths for external artifacts should be prefixed with "../<repo name>".
-    // if (root.isLegacy()) {
-    //   // Root-relative paths of external artifacts under legacy roots are already prefixed with
-    //   // "external/<repo name>". Just replace "external" with "..".
-    //   if (relativePath.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX)) {
-    //     relativePath = relativePath.relativeTo(LabelConstants.EXTERNAL_PATH_PREFIX);
-    //     relativePath = LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(relativePath);
-    //   }
-    // } else {
-    //   if (root.isExternal()) {
-    //     // Both external source artifacts and external derived artifacts have their repo name as
-    //     // their 2nd level directory name in their exec paths.
-    //     // i.e. external/<repo name>/... and bazel-out/<repo name>/...
-    //     // This is a pure coincidence, and the below line needs to be updated if any of the
-    //     // directory structures change.
-    //     String repoName = execPath.getSegment(1);
-    //     relativePath =
-    //         LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX
-    //             .getRelative(repoName)
-    //             .getRelative(relativePath);
-    //   } else {
-    //     return execPath.subFragment(1);
-    //   }
-    // }
     // We can't use root.isExternalSource() here since it needs to handle derived artifacts too.
-    // return relativePath;
+    return relativePath;
   }
 
   @Override
