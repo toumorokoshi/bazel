@@ -22,9 +22,12 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
 
     @Test
     public void testRunfilesConflict() throws Exception {
-        // assertThrows(BuildFailedException.class, () -> buildTarget("//:hello_world"));
+        buildTarget("//x:echo_edition");
+        assertContents("print('community')", "//x:echo_edition");
         buildTarget("//x:hello_world_community");
+        assertContents("print('community')", "//x:hello_world_community");
         buildTarget("//x:hello_world_enterprise");
+        assertContents("print('enterprise')", "//x:hello_world_enterprise");
     }
 
     private void writeFile() throws IOException {
@@ -72,18 +75,24 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
                         )
                                                 
                         def _impl(ctx):
+                            dep = ctx.attr.dep[DefaultInfo]
+                            input_file = dep.files.to_list()[0]
                             out_file = ctx.actions.declare_file(ctx.attr.out)
+                            
                             ctx.actions.run_shell(
+                                inputs = [input_file],
                                 outputs = [out_file],
-                                command = "cat %s > %s".format(
-                                    ctx.attr.src, out_file.path
-                                )
+                                command = "cp $1 $2",
+                                arguments = [input_file.path, out_file.path],
+                            )
+                            return DefaultInfo(
+                                files=depset([out_file]),
                             )
 
                         copy = rule(
                             implementation = _impl,
                             attrs = {
-                                "src": attr.string(),
+                                "dep": attr.label(mandatory=True, providers=[DefaultInfo]),
                                 "edition": attr.string(), 
                                 "out": attr.string(),
                             },
@@ -111,23 +120,23 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
                             name = "echo_edition",
                             outs = ["edition.txt"],
                             cmd = select({
-                                    "//config:community_edition": '''echo "print('community')" > $(ctx.outputs.out.path)''',
-                                    "//config:enterprise_edition": '''echo "print('enterprise')" > $(ctx.outputs.out.path)'''
+                                    "//config:community_edition": '''echo "print('community')" > $(location edition.txt)''',
+                                    "//config:enterprise_edition": '''echo "print('enterprise')" > $(location edition.txt)'''
                             }),
                        )
                        
                        copy(
                           name="hello_world_community",
-                          src = ":echo_edition",
+                          dep=":echo_edition",
                           edition="community",
-                          out="community"
+                          out="community.txt"
                        )
                        
                        copy(
                           name="hello_world_enterprise",
-                          src = ":echo_edition",
+                          dep=":echo_edition",
                           edition="enterprise",
-                          out="community"
+                          out="enterprise.txt"
                        )
                        """);
     }
