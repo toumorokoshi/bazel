@@ -22,14 +22,14 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
 
     @Test
     public void testRunfilesConflict() throws Exception {
+        buildTarget("//x:combined");
+        assertContents("print('community')\nprint('enterprise')", "//x:combined");
         buildTarget("//x:echo_edition");
         assertContents("print('community')", "//x:echo_edition");
         buildTarget("//x:hello_world_community");
         assertContents("print('community')", "//x:hello_world_community");
         buildTarget("//x:hello_world_enterprise");
         assertContents("print('enterprise')", "//x:hello_world_enterprise");
-        buildTarget("//x:combined");
-        assertContents("print('community')\nprint('enterprise')", "//x:combined");
     }
 
     private void writeFile() throws IOException {
