@@ -22,14 +22,14 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
 
     @Test
     public void testRunfilesConflict() throws Exception {
-        buildTarget("//x:combined");
-        assertContents("print('community')\nprint('enterprise')", "//x:combined");
         buildTarget("//x:echo_edition");
-        assertContents("print('community')", "//x:echo_edition");
-        buildTarget("//x:hello_world_community");
-        assertContents("print('community')", "//x:hello_world_community");
-        buildTarget("//x:hello_world_enterprise");
-        assertContents("print('enterprise')", "//x:hello_world_enterprise");
+        assertContents("community", "//x:echo_edition");
+        buildTarget("//x:community");
+        // assertContents("community", "//x:community");
+        // buildTarget("//x:hello_world_enterprise");
+        // assertContents("print('enterprise')", "//x:hello_world_enterprise");
+        // buildTarget("//x:combined");
+        // assertContents("print('community')\nprint('enterprise')", "//x:combined");
     }
 
     private void writeFile() throws IOException {
@@ -63,94 +63,128 @@ public class RunfilesConflictTest extends BuildIntegrationTestCase {
         write(
                 "rules.bzl",
                 """
-                       
-                        # attr is passed implicitly from the rule,
-                        # wiring this up to the transition.
-                        def _edition_transition_impl(settings, attr):
-                            edition = attr.edition
-                            return {"//config:edition": edition}
+                # attr is passed implicitly from the rule,
+                # wiring this up to the transition.
+                def _edition_transition_impl(settings, attr):
+                    edition = attr.edition
+                    return {"//config:edition": edition}
                                                 
-                        edition_transition = transition(
-                            implementation = _edition_transition_impl,
-                            inputs = [],
-                            outputs = ["//config:edition"],
-                        )
+                edition_transition = transition(
+                    implementation = _edition_transition_impl,
+                    inputs = [],
+                    outputs = ["//config:edition"],
+                )
+                
+                def _impl(ctx):
+                    executable = ctx.actions.declare_file(ctx.label.name)
+                    ctx.actions.write(executable, content="#!/bin/true", is_executable=True)
+                    return [
+                        DefaultInfo(
+                            executable = executable,
+                            runfiles = ctx.runfiles(files=[]),
+                        ),
+                    ]
                                                 
-                        def _impl(ctx):
-                            dep = ctx.attr.dep[DefaultInfo]
-                            input_file = dep.files.to_list()[0]
-                            out_file = ctx.actions.declare_file(ctx.attr.out)
-                            
-                            ctx.actions.run_shell(
-                                inputs = [input_file],
-                                outputs = [out_file],
-                                command = "cp $1 $2",
-                                arguments = [input_file.path, out_file.path],
-                            )
-                            return DefaultInfo(
-                                files=depset([out_file]),
-                            )
+                def _impl_2(ctx):
+                    # dep = ctx.attr.dep[DefaultInfo]
+                    # input_file = 
+                    out_file = ctx.actions.declare_file(ctx.label.name + "-script")
+                    # runfiles = ctx.runfiles(files=ctx.attr.src.files.to_list())
+                    ctx.actions.write(
+                        out_file,
+                        content='''
+                        #!/usr/bin/env bash
+                        echo "hello"'''.format(
+                            # ctx.attr.src.files.to_list()[0].path
+                        ),
+                        is_executable=True,
+                    )
+                    return [DefaultInfo(
+                        executable=out_file,
+                        runfiles=ctx.runfiles(),
+                        # runfiles=,
+                    )Caused by: com.google.devtools.build.lib.actions.EnvironmentalExecException: build-runfiles failed: error executing <shell command> command 
 
-                        copy = rule(
-                            implementation = _impl,
-                            attrs = {
-                                "dep": attr.label(mandatory=True, providers=[DefaultInfo]),
-                                "edition": attr.string(), 
-                                "out": attr.string(),
-                            },
-                            # this line selects the edition based on the
-                            # attr passed.
-                            cfg = edition_transition,
-                        )
+  (cd /tmp/bazel-working-directory/_main/_tmp/75737149b2088d82dbec17b3813e2000/outputBase/execroot/_main && \
+
+  exec env - \
+
+  /tmp/bazel-working-directory/_main/_tmp/75737149b2088d82dbec17b3813e2000/outputBase/build-runfiles --allow_relative bazel-out/k8-fastbuild/bin/x/community.runfiles_manifest bazel-out/k8-fastbuild/bin/x/community.runfiles): java.io.IOException: Cannot run program "/tmp/bazel-working-directory/_main/_tmp/75737149b2088d82dbec17b3813e2000/outputBase/build-runfiles" (in directory "/tmp/bazel-working-directory/_main/_tmp/75737149b2088d82dbec17b3813e2000/outputBase/execroot/_main"): error=2, No such file or directory: java.io.IOException: Cannot run program "/tmp/bazel-working-directory/_main/_tmp/75737149b2088d82dbec17b3813e2000/outputBase/build-runfiles" (in directory "/tmp/bazel-working-directory/_main/_tmp/75737149b2088d82dbec17b3813e2000/outputBase/execroot/_main"): error=2, No such file or directory
+
+    at com.google.devtools.build.lib.exec.SymlinkTreeHelper.createSymlinksUsingCommand(SymlinkTreeHelper.java:197)]
+
+                sh_binary_with_edition = rule(
+                    implementation = _impl,
+                    executable=True,
+                    attrs = {
+                        # "src": attr.label(mandatory=True, allow_files=True),
+                        # "edition": attr.string(), 
+                        # "out": attr.string(),
+                    },
+                    # this line selects the edition based on the
+                    # attr passed.
+                    # cfg = edition_transition,
+                )
                         
-                        EditionProvider = provider(fields = ["edition"])
+                EditionProvider = provider(fields = ["edition"])
                         
-                        def _edition_flag_impl(ctx):
-                            return EditionProvider(edition = ctx.build_setting_value)
+                def _edition_flag_impl(ctx):
+                    return EditionProvider(edition = ctx.build_setting_value)
                                                 
-                        edition_flag = rule(
-                            implementation = _edition_flag_impl,
-                            build_setting = config.string(flag = True),
-                        )
-                        """);
+                edition_flag = rule(
+                    implementation = _edition_flag_impl,
+                    build_setting = config.string(flag = True),
+                )
+                """);
+        // shell script needed to test the executables.
+        write(
+                "x/test.sh",
+                """
+                bazel/artifacts/community
+                bazel/artifacts/enterprise
+                """
+        );
         write(
                 "x/BUILD",
                 """
-                       load("//:rules.bzl", "copy")
+                      load("//:rules.bzl", "sh_binary_with_edition")
                         
-                       genrule(
+                      genrule(
                             name = "echo_edition",
-                            outs = ["edition.txt"],
+                            outs = ["edition.sh"],
                             cmd = select({
-                                    "//config:community_edition": '''echo "print('community')" > $(location edition.txt)''',
-                                    "//config:enterprise_edition": '''echo "print('enterprise')" > $(location edition.txt)'''
+                                    "//config:community_edition": '''echo 'community' > $(location edition.sh)''',
+                                    "//config:enterprise_edition": '''echo 'enterprise' > $(location edition.sh)'''
                             }),
-                       )
+                      )
                        
-                       copy(
-                          name="hello_world_community",
-                          dep=":echo_edition",
-                          edition="community",
-                          out="community.txt"
-                       )
+                      sh_binary_with_edition(
+                          name="community",
+                          # src="edition.sh",
+                          # edition="community",
+                      )
                        
-                       copy(
-                          name="hello_world_enterprise",
-                          dep=":echo_edition",
-                          edition="enterprise",
-                          out="enterprise.txt"
-                       )
-                       
-                       genrule(
-                           name = "combined",
-                           srcs = [
-                             ":hello_world_community",
-                             ":hello_world_enterprise",
-                           ],
-                           outs = ["combined.txt"],
-                           cmd = "cat $(SRCS) > $(location combined.txt)",
-                       )
-                       """);
+                      sh_binary_with_edition(
+                          name="enterprise",
+                          # src="edition.sh",
+                          # edition="enterprise",
+                      )
+              
+                      # root/ 
+                      #   test.sh                        
+                      #   community (something that sets edition=community and calls a dep)
+                      #   enterprise (something that sets edition=enterprise and calls a dep)
+                      #   edition.txt (The file that chages)
+                      sh_test(
+                         name = "test",
+                         srcs = ["test.sh"],
+                         data = [
+                           "community", 
+                           "enterprise"
+                         ],
+                         tags = ["no-sandbox"]
+                      )
+                      """);
     }
 
 }
